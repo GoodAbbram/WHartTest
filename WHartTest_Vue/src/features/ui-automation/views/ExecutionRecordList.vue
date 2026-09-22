@@ -42,7 +42,7 @@
       :data="recordData"
       :pagination="pagination"
       :loading="loading"
-      :scroll="{ x: 1100 }"
+      :scroll="{ x: 1200 }"
       row-key="id"
       @page-change="onPageChange"
       @page-size-change="onPageSizeChange"
@@ -87,7 +87,8 @@
     >
       <template v-if="currentRecord">
         <a-descriptions :column="2" bordered size="small">
-          <a-descriptions-item :label="pageText.caseName">{{ currentRecord.test_case_name ?? `ID: ${currentRecord.test_case}` }}</a-descriptions-item>
+          <a-descriptions-item :label="pageText.caseId">{{ currentRecord.test_case ?? '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="pageText.caseName">{{ currentRecord.test_case_name ?? '-' }}</a-descriptions-item>
           <a-descriptions-item :label="pageText.executor">{{ currentRecord.executor_name ?? '-' }}</a-descriptions-item>
           <a-descriptions-item :label="pageText.executionStatus">
             <a-tag :color="statusColors[currentRecord.status as ExecutionStatus]">
@@ -209,6 +210,7 @@ const pageText = computed(() => (
         delete: 'Delete',
         deleteConfirm: 'Delete this execution record? Related screenshots, videos, and trace files will also be deleted.',
         drawerTitle: 'Execution record details',
+        caseId: 'Case ID',
         caseName: 'Case Name',
         executor: 'Executor',
         executionStatus: 'Execution status',
@@ -229,6 +231,7 @@ const pageText = computed(() => (
         scheduled: 'Scheduled',
         api: 'API Trigger',
         caseNameColumn: 'Case Name',
+        caseIdColumn: 'Case ID',
         executorColumn: 'Executor',
         statusColumn: 'Status',
         durationColumn: 'Duration',
@@ -251,6 +254,7 @@ const pageText = computed(() => (
         delete: '删除',
         deleteConfirm: '确定删除此执行记录？关联的截图、视频、Trace文件将一并删除。',
         drawerTitle: '执行记录详情',
+        caseId: '用例ID',
         caseName: '用例名称',
         executor: '执行人',
         executionStatus: '执行状态',
@@ -271,6 +275,7 @@ const pageText = computed(() => (
         scheduled: '定时执行',
         api: 'API 触发',
         caseNameColumn: '用例名称',
+        caseIdColumn: '用例ID',
         executorColumn: '执行人',
         statusColumn: '状态',
         durationColumn: '时长',
@@ -321,6 +326,7 @@ const getStatusLabel = (status?: number) => {
 
 const columns = computed(() => [
   { title: 'ID', dataIndex: 'id', width: 70, align: 'center' as const },
+  { title: pageText.value.caseIdColumn, dataIndex: 'test_case', width: 90, align: 'center' as const },
   { title: pageText.value.caseNameColumn, dataIndex: 'test_case_name', ellipsis: true, tooltip: true, width: 180, align: 'center' as const },
   { title: pageText.value.executorColumn, dataIndex: 'executor_name', width: 100, align: 'center' as const },
   { title: pageText.value.statusColumn, slotName: 'status', width: 90, align: 'center' as const },

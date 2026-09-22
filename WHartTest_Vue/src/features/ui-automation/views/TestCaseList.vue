@@ -24,6 +24,17 @@
             {{ option.value }}
           </a-option>
         </a-select>
+        <a-select
+          v-model="filters.status"
+          :placeholder="pageText.caseStatus"
+          allow-clear
+          style="width: 120px"
+          @change="onSearch"
+        >
+          <a-option v-for="option in statusOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </a-option>
+        </a-select>
         <a-input-search
           v-model="filters.search"
           :placeholder="pageText.searchCaseName"
@@ -254,6 +265,7 @@ const pageText = computed(() => (
     ? {
         selectModule: 'Select module',
         caseLevel: 'Case level',
+        caseStatus: 'Case status',
         searchCaseName: 'Search case name',
         selectActuator: 'Select actuator',
         noOnlineActuators: 'No online actuators',
@@ -329,6 +341,7 @@ const pageText = computed(() => (
     : {
         selectModule: '选择模块',
         caseLevel: '用例等级',
+        caseStatus: '用例状态',
         searchCaseName: '搜索用例名称',
         selectActuator: '选择执行器',
         noOnlineActuators: '暂无在线执行器',
@@ -425,6 +438,7 @@ const formRef = ref()
 const filters = reactive({
   module: undefined as number | undefined,
   level: undefined as string | undefined,
+  status: undefined as ExecutionStatus | undefined,
   search: '',
 })
 
@@ -482,6 +496,13 @@ const levelOptions = computed(() => (
       ]
 ))
 
+const statusOptions = computed(() => (
+  ([0, 1, 2, 3] as ExecutionStatus[]).map(value => ({
+    value,
+    label: tl(STATUS_LABELS[value]),
+  }))
+))
+
 const batchExecuteLabel = computed(() => pageText.value.batchExecuteLabel(selectedRowKeys.value.length))
 const batchDeleteLabel = computed(() => pageText.value.batchDeleteLabel(selectedRowKeys.value.length))
 
@@ -537,6 +558,7 @@ const fetchTestCases = async () => {
       project: projectId.value,
       module: filters.module,
       level: filters.level,
+      status: filters.status,
       search: filters.search || undefined,
     })
     const { items, count } = extractPaginationData(res)
