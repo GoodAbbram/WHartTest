@@ -147,6 +147,13 @@
           </template>
         </a-dropdown>
       </template>
+      <template #executionStatus="{ record }">
+        <a-tooltip :content="record.execution_error_message" :disabled="!record.execution_error_message">
+          <a-tag :color="getExecutionStatusMeta(record.execution_status).color">
+            {{ getExecutionStatusMeta(record.execution_status).label }}
+          </a-tag>
+        </a-tooltip>
+      </template>
       <template #module="{ record }">
         <span v-if="record.module_detail">{{ record.module_detail }}</span>
         <span v-else class="text-gray">{{ pageText.unassigned }}</span>
@@ -247,6 +254,11 @@ const pageText = computed(() => (
         priority: 'Priority',
         testType: 'Test type',
         reviewStatus: 'Review status',
+        executionStatus: 'Execution status',
+        execNotRun: 'Not run',
+        execRunning: 'Running',
+        execPass: 'Passed',
+        execFail: 'Failed',
         module: 'Module',
         creator: 'Created by',
         createdAt: 'Created at',
@@ -300,6 +312,11 @@ const pageText = computed(() => (
         priority: '优先级',
         testType: '测试类型',
         reviewStatus: '审核状态',
+        executionStatus: '执行状态',
+        execNotRun: '未执行',
+        execRunning: '执行中',
+        execPass: '成功',
+        execFail: '失败',
         module: '所属模块',
         creator: '创建者',
         createdAt: '创建时间',
@@ -390,6 +407,17 @@ const getReviewStatusLabel = (status?: string): string => {
     return reviewStatusOptions.value[0]?.label || '';
   }
   return reviewStatusOptions.value.find(option => option.value === status)?.label || status;
+};
+
+// 执行状态标签（0未执行/1执行中/2成功/3失败）
+const getExecutionStatusMeta = (status?: number): { label: string; color: string } => {
+  const meta: Record<number, { label: string; color: string }> = {
+    0: { label: pageText.value.execNotRun, color: 'gray' },
+    1: { label: pageText.value.execRunning, color: 'arcoblue' },
+    2: { label: pageText.value.execPass, color: 'green' },
+    3: { label: pageText.value.execFail, color: 'red' },
+  };
+  return meta[status ?? 0] ?? meta[0];
 };
 
 const getTestTypeLabel = (testType?: string): string => {
@@ -534,6 +562,7 @@ const columns = computed(() => [
   { title: pageText.value.priority, dataIndex: 'level', slotName: 'level', width: 80, align: 'center' },
   { title: pageText.value.testType, dataIndex: 'test_type', slotName: 'testType', width: 90, align: 'center' },
   { title: pageText.value.reviewStatus, dataIndex: 'review_status', slotName: 'reviewStatus', width: 120, align: 'center' },
+  { title: pageText.value.executionStatus, dataIndex: 'execution_status', slotName: 'executionStatus', width: 90, align: 'center' },
   { title: pageText.value.module, dataIndex: 'module_detail', slotName: 'module', width: 100, ellipsis: true, tooltip: true, align: 'center' },
   {
     title: pageText.value.creator,

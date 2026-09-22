@@ -72,6 +72,8 @@ class TestCaseListSerializer(serializers.ModelSerializer):
             "updated_at",
             "review_status",
             "test_type",
+            "execution_status",
+            "execution_error_message",
         ]
         read_only_fields = fields
 
@@ -122,6 +124,9 @@ class TestCaseSerializer(serializers.ModelSerializer):
             "updated_at",
             "review_status",
             "test_type",
+            "execution_status",
+            "execution_result_data",
+            "execution_error_message",
         ]
         read_only_fields = [
             "id",

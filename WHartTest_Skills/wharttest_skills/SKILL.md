@@ -35,6 +35,7 @@ python whart_tools.py --action <action_name> [--参数名 参数值]
 | `get_testcase_detail` | 获取用例详情 | `--project_id`, `--case_id` |
 | `add_testcase` | 新增测试用例 | `--project_id`, `--module_id`, `--name`, `--level`, `--precondition`, `--steps`, `--notes`, `--review_status`, `--test_type` |
 | `edit_testcase` | 编辑测试用例 | `--project_id`, `--case_id`, `--name`, `--level`, `--module_id`, `--precondition`, `--steps`, `--notes`, `--review_status`, `--test_type`, `--is_optimization` |
+| `update_testcase_execution_status` | 回写用例执行状态（执行用例完成后必须调用） | `--project_id`, `--case_id`, `--execution_status`(running/pass/fail), `--message`(失败原因或总结，可选) |
 
 ### 截图管理
 
@@ -77,6 +78,15 @@ python whart_tools.py --action <action_name> [--参数名 参数值]
 - `needs_optimization` - 优化
 - `optimization_pending_review` - 优化待审核
 - `unavailable` - 不可用
+
+### 执行状态回写
+
+`--execution_status` 可选值（配合 `update_testcase_execution_status` 使用）：
+- `running` - 开始执行
+- `pass` - 执行成功
+- `fail` - 执行失败（建议附带 `--message` 说明失败原因）
+
+**约定**：AI 执行测试用例时，开始执行后先回写 `running`；全部步骤执行完成后必须回写最终结果 `pass` 或 `fail`，用例列表将展示该状态。
 
 ### 测试类型
 

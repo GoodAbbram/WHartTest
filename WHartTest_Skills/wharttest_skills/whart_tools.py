@@ -294,6 +294,29 @@ def edit_testcase(project_id: int, case_id: int, name: str = None, level: str = 
         return {"success": False, "error": str(e)}
 
 
+def update_testcase_execution_status(project_id: int, case_id: int, execution_status: str, message: str = ""):
+    """回写测试用例执行状态（执行完成后必须调用）
+
+    Args:
+        execution_status: running=开始执行 / pass=执行成功 / fail=执行失败
+        message: 失败原因或结果总结
+    """
+    normalized = str(execution_status or "").strip().lower()
+    if normalized not in ("running", "pass", "fail"):
+        return {"error": "execution_status 无效，应为 running/pass/fail"}
+    url = f"{_base_url()}/api/projects/{project_id}/testcases/{case_id}/execution-status/"
+    data = {"status": normalized}
+    if message:
+        data["message"] = message
+    try:
+        resp = requests.post(url, headers=_headers(), json=data)
+        resp.raise_for_status()
+        label = {"running": "执行中", "pass": "成功", "fail": "失败"}[normalized]
+        return {"success": True, "message": f"用例ID {case_id} 执行状态已回写: {label}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def _collect_screenshot_candidate_dirs():
     """收集截图搜索目录，优先约定目录，再兼容常见临时目录。"""
     candidates = []
@@ -772,6 +795,9 @@ ACTIONS = {
             args.review_status, args.test_type, args.is_optimization
         )
     ),
+    "update_testcase_execution_status": lambda args: update_testcase_execution_status(
+        args.project_id, args.case_id, args.execution_status, args.message or ""
+    ),
     "upload_screenshot": lambda args: upload_screenshot(
         args.project_id, args.case_id, args.file_path, args.title,
         args.description or "", args.step_number, args.page_url or ""
@@ -823,6 +849,8 @@ def main():
     parser.add_argument("--step_number", type=int, help="步骤编号")
     parser.add_argument("--page_url", help="页面URL")
     parser.add_argument("--review_status", help="审核状态 (pending_review/approved/needs_optimization/optimization_pending_review/unavailable)")
+    parser.add_argument("--execution_status", help="执行状态回写 (running/pass/fail)")
+    parser.add_argument("--message", help="执行失败原因或结果总结")
     parser.add_argument("--test_type", help="测试类型 (smoke/functional/boundary/exception/permission/security/compatibility)", default="functional")
     parser.add_argument("--is_optimization", action="store_true", help="是否为优化操作（自动设置状态为optimization_pending_review）")
     parser.add_argument("--page", type=int, default=1, help="页码")

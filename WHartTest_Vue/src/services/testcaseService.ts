@@ -64,6 +64,8 @@ export interface TestCase {
   screenshot?: string; // 兼容旧的单个截图字段
   screenshots?: TestCaseScreenshot[]; // 新的多截图字段
   review_status?: ReviewStatus; // 审核状态
+  execution_status?: number; // 执行状态: 0未执行/1执行中/2成功/3失败
+  execution_error_message?: string | null; // 最近一次执行失败原因
   creator: number;
   creator_detail: {
     id: number;

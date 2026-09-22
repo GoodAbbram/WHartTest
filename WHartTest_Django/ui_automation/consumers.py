@@ -645,6 +645,9 @@ class UiAutomationConsumer(AsyncWebsocketConsumer):
     
     async def handle_case_result(self, args: dict, user: str):
         """处理用例执行结果（来自执行器）"""
+        # 结果已回传，释放预留的执行器槽位（单用例 1 槽；批量一次回传时按 case_ids 数量释放）
+        result_count = len(args.get('case_ids') or []) or 1
+        self._release_actuator_slots(args, result_count)
         logger.info(f"收到用例结果, 执行用户: {user}")
         
         # 保存执行结果到数据库

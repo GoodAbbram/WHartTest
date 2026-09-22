@@ -195,7 +195,8 @@ async def _execute_tasks_concurrently(execution, tasks_list, max_concurrent):
                 task_obj.status = 'running'
                 task_obj.started_at = timezone.now()
                 await sync_to_async(task_obj.save)()
-                
+                await _mark_testcase_running(task_obj.testcase_id)
+
                 # 执行测试用例
                 await _execute_testcase_via_chat_api(task_obj)
                 task_name = task_obj.testcase.name
@@ -232,6 +233,7 @@ async def _execute_tasks_concurrently(execution, tasks_list, max_concurrent):
                     task_obj.execution_time = (task_obj.completed_at - task_obj.started_at).total_seconds()
                 
                 await sync_to_async(task_obj.save)()
+                await sync_to_async(_write_back_testcase_execution_status)(task_obj)
                 
                 # 更新错误计数
                 await sync_to_async(_update_execution_counts)(execution, 'error')
@@ -279,8 +281,42 @@ def _get_test_execution_prompt(executor):
 
 @sync_to_async
 def _save_result(result: TestCaseResult):
-    """异步安全地保存测试结果"""
+    """异步安全地保存测试结果，并回写用例本身的执行状态"""
     result.save()
+    _write_back_testcase_execution_status(result)
+
+
+# 用例执行状态取值: 0未执行/1执行中/2成功/3失败
+TESTCASE_EXECUTION_STATUS_MAP = {'pass': 2, 'fail': 3, 'error': 3}
+
+
+def _write_back_testcase_execution_status(result: TestCaseResult):
+    """将执行结果回写到用例的执行状态字段（成功/失败）；skip/running 不回写"""
+    status_value = TESTCASE_EXECUTION_STATUS_MAP.get(result.status)
+    if status_value is None:
+        return
+
+    updates = {'execution_status': status_value}
+    if status_value == 3:
+        error_message = (result.error_message or '').strip() or '测试未通过'
+        updates['execution_error_message'] = error_message[:500]
+    else:
+        updates['execution_error_message'] = None
+        updates['execution_result_data'] = {
+            'execution_id': result.execution_id,
+            'result_id': result.id,
+            'status': result.status,
+            'finished_at': result.completed_at.isoformat() if result.completed_at else None,
+            'execution_time': result.execution_time,
+        }
+
+    TestCase.objects.filter(id=result.testcase_id).update(**updates)
+
+
+@sync_to_async
+def _mark_testcase_running(testcase_id):
+    """标记用例为执行中"""
+    TestCase.objects.filter(id=testcase_id).update(execution_status=1)
 
 
 def _normalize_media_url(url: str) -> str:

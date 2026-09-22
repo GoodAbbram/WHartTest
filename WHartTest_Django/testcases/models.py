@@ -42,6 +42,13 @@ class TestCase(models.Model):
         ('unavailable', _('不可用')),
     ]
 
+    EXECUTION_STATUS_CHOICES = [
+        (0, _('未执行')),
+        (1, _('执行中')),
+        (2, _('成功')),
+        (3, _('失败')),
+    ]
+
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
@@ -95,6 +102,25 @@ class TestCase(models.Model):
         choices=TEST_TYPE_CHOICES,
         default='functional',
         blank=True,
+    )
+    execution_status = models.SmallIntegerField(
+        _('执行状态'),
+        choices=EXECUTION_STATUS_CHOICES,
+        default=0,
+        db_index=True,
+        help_text=_('最近一次执行结果：0未执行/1执行中/2成功/3失败')
+    )
+    execution_result_data = models.JSONField(
+        _('执行结果数据'),
+        blank=True,
+        null=True,
+        help_text=_('最近一次执行的摘要信息（执行记录ID、耗时、完成时间等）')
+    )
+    execution_error_message = models.TextField(
+        _('执行失败原因'),
+        blank=True,
+        null=True,
+        help_text=_('最近一次执行失败时的原因说明')
     )
 
     class Meta:

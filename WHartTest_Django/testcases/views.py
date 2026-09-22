@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.http import HttpResponse
 from django.conf import settings
+from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -513,6 +514,54 @@ class TestCaseViewSet(viewsets.ModelViewSet):
                 {"error": f"删除过程中发生错误: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    @action(detail=True, methods=["post"], url_path="execution-status")
+    def execution_status(self, request, project_pk=None, pk=None):
+        """
+        回写用例执行状态（供 AI 工具/执行链路调用）
+        POST /api/projects/{project_pk}/testcases/{pk}/execution-status/
+        请求体: {"status": "running|pass|fail", "message": "原因或总结(可选)"}
+        """
+        testcase = self.get_object()
+        raw_status = str(request.data.get("status", "")).strip().lower()
+        status_alias = {
+            "running": "running", "executing": "running",
+            "pass": "pass", "passed": "pass", "success": "pass",
+            "fail": "fail", "failed": "fail", "error": "fail",
+        }
+        normalized = status_alias.get(raw_status)
+        if not normalized:
+            return Response(
+                {"error": "status 参数无效，应为 running/pass/fail"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        status_value = {"running": 1, "pass": 2, "fail": 3}[normalized]
+        testcase.execution_status = status_value
+        message = str(request.data.get("message") or "").strip()
+
+        if normalized == "running":
+            testcase.execution_result_data = {
+                "status": "running",
+                "started_at": timezone.now().isoformat(),
+            }
+        else:
+            testcase.execution_error_message = message if normalized == "fail" else None
+            testcase.execution_result_data = {
+                "status": "pass" if normalized == "pass" else "fail",
+                "message": message or None,
+                "finished_at": timezone.now().isoformat(),
+            }
+
+        testcase.save(update_fields=[
+            "execution_status", "execution_result_data",
+            "execution_error_message", "updated_at",
+        ])
+        return Response({
+            "message": "执行状态已更新",
+            "testcase_id": testcase.id,
+            "execution_status": testcase.execution_status,
+        })
 
     @action(detail=True, methods=["post"], url_path="upload-screenshots")
     @permission_required("testcases.add_testcasescreenshot")

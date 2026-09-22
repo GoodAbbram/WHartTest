@@ -2,6 +2,14 @@
   <div class="execution-record-list">
     <div class="page-header">
       <div class="search-box">
+        <a-input-search
+          v-model="filters.case_name"
+          :placeholder="pageText.caseNamePlaceholder"
+          allow-clear
+          style="width: 220px; margin-right: 12px"
+          @search="onSearch"
+          @clear="onSearch"
+        />
         <a-select
           v-model="filters.status"
           :placeholder="pageText.statusPlaceholder"
@@ -193,6 +201,7 @@ const pageText = computed(() => (
   isEnglish.value
     ? {
         statusPlaceholder: 'Status',
+        caseNamePlaceholder: 'Search by case name',
         triggerPlaceholder: 'Trigger type',
         refresh: 'Refresh',
         unknown: 'Unknown',
@@ -234,6 +243,7 @@ const pageText = computed(() => (
       }
     : {
         statusPlaceholder: '执行状态',
+        caseNamePlaceholder: '输入用例名称搜索',
         triggerPlaceholder: '触发类型',
         refresh: '刷新',
         unknown: '未知',
@@ -278,6 +288,7 @@ const pageText = computed(() => (
 const filters = reactive({
   status: undefined as number | undefined,
   trigger_type: undefined as string | undefined,
+  case_name: '' as string,
 })
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showTotal: true, showPageSize: true })
 
@@ -395,6 +406,7 @@ const fetchRecords = async () => {
       project: projectId.value,
       status: filters.status,
       trigger_type: filters.trigger_type,
+      test_case__name__icontains: filters.case_name.trim() || undefined,
     })
     const { items, count } = extractPaginationData(res)
     recordData.value = items

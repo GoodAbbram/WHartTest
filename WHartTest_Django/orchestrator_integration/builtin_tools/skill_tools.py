@@ -593,10 +593,8 @@ def get_skill_tools(
                             f"[execute_skill_script] 持久化会话执行完成, session_key={session_key}"
                         )
                         cleaned_output = strip_terminal_control_sequences(output)
-                        result_output = (
-                            cleaned_output.strip()
-                            if cleaned_output.strip()
-                            else "(无输出)"
+                        result_output = _truncate_tool_output(
+                            cleaned_output.strip() or "(无输出)"
                         )
                         result_output = (
                             f'[PERSISTENT_SESSION] session_id={session_id}\n'
@@ -674,6 +672,9 @@ def get_skill_tools(
                     output += "\n--- stderr ---\n"
                 output += stderr
 
+            # 防止超大输出（如完整 trace）进入后续处理，拖垮事件循环
+            output = _truncate_tool_output(output)
+
             if result.returncode != 0:
                 output = f"命令执行失败 (退出码: {result.returncode})\n{output}"
 
@@ -707,6 +708,22 @@ def get_skill_tools(
         except Exception as e:
             logger.error(f"[execute_skill_script] 执行失败: {e}", exc_info=True)
             return f"错误: {str(e)}"
+
+    # 工具输出上限：超大输出（如 Playwright trace 全文可达 17MB+）会拖垮 ASGI 事件循环、
+    # 导致整个服务假死（所有 HTTP 请求无响应），同时也会撑爆 LLM 上下文
+    MAX_TOOL_OUTPUT_CHARS = 200_000
+
+    def _truncate_tool_output(output: str) -> str:
+        """截断超长工具输出，保留头尾并标注原始长度。"""
+        if len(output) <= MAX_TOOL_OUTPUT_CHARS:
+            return output
+        half = MAX_TOOL_OUTPUT_CHARS // 2
+        omitted = len(output) - MAX_TOOL_OUTPUT_CHARS
+        return (
+            f"{output[:half]}\n"
+            f"...[输出过长已截断：原始长度 {len(output)} 字符，省略中间 {omitted} 字符]...\n"
+            f"{output[-half:]}"
+        )
 
     @langchain_tool
     def execute_skill_script(

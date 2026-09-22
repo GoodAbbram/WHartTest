@@ -669,7 +669,8 @@ const handleExecuteConfirm = (options: { generatePlaywrightScript: boolean }) =>
 2. 调用工具执行测试用例，并验证相应的断言。
 3. 每一步执行后截图，可以单张上传，也可以批量上传。
 4. 必须上传截图以供查看。
-5. 执行结束后告知用户本次测试是否通过，并总结。
+5. 执行结束后，必须调用工具 update_testcase_execution_status 回写执行状态：测试通过传 --execution_status pass，测试未通过传 --execution_status fail，并用 --message 简要说明原因。
+6. 执行结束后告知用户本次测试是否通过，并总结。
 
 附加信息：
 - 测试用例名称：${testCase.name}
