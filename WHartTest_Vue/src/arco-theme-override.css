@@ -108,11 +108,11 @@
   border-color: var(--theme-accent) !important;
 }
 
-/* 分页组件 - 移除当前页颜色 */
+/* 分页组件 - 当前页高亮 */
 .arco-pagination-item-active {
-  background-color: transparent !important;
-  border-color: var(--theme-border) !important;
-  color: inherit !important;
+  background-color: var(--theme-accent) !important;
+  border-color: var(--theme-accent) !important;
+  color: #fff !important;
 }
 
 /* 表格选中行 */

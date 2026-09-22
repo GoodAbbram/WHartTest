@@ -15,15 +15,15 @@ export default defineConfig({
     allowedHosts: ['host.docker.internal'],
     proxy: {
       '/api/': {
-        target: 'http://localhost:8000', // 您的后端 API 地址
+        target: 'http://localhost:8100', // 您的后端 API 地址
         changeOrigin: true,
       },
       '/media': {
-        target: 'http://localhost:8000', // 您的后端 API 地址
+        target: 'http://localhost:8100', // 您的后端 API 地址
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8000', // WebSocket 地址
+        target: 'ws://localhost:8100', // WebSocket 地址
         ws: true,
         changeOrigin: true,
       },

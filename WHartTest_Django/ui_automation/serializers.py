@@ -266,17 +266,26 @@ class UiTestCaseListSerializer(serializers.ModelSerializer):
     module_name = serializers.CharField(source='module.name', read_only=True)
     creator_name = serializers.CharField(source='creator.username', read_only=True)
     step_count = serializers.SerializerMethodField()
+    error_message = serializers.SerializerMethodField()
 
     class Meta:
         model = UiTestCase
         fields = [
             'id', 'project', 'module', 'module_name', 'name', 'level', 'status',
-            'file_ids', 'step_count', 'creator', 'creator_name', 'created_at', 'updated_at'
+            'file_ids', 'step_count', 'creator', 'creator_name', 'created_at', 'updated_at',
+            'error_message'
         ]
         read_only_fields = ['status', 'creator', 'created_at', 'updated_at']
 
     def get_step_count(self, obj):
         return obj.case_steps.count()
+
+    def get_error_message(self, obj):
+        """最近一次执行的失败原因（截断，避免长文本拖慢列表）"""
+        message = (obj.error_message or '').strip()
+        if len(message) > 200:
+            return message[:200] + '...'
+        return message
 
 
 class UiTestCaseSerializer(serializers.ModelSerializer):

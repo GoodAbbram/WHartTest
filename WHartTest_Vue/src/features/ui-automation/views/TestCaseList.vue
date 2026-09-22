@@ -34,6 +34,15 @@
         />
       </div>
       <div class="action-buttons">
+        <a-button
+          type="outline"
+          :loading="exporting"
+          :disabled="selectedRowKeys.length === 0"
+          @click="exportPlaywrightCases"
+        >
+          <template #icon><icon-download /></template>
+          {{ pageText.exportPlaywright }}
+        </a-button>
         <a-select
           v-model="selectedActuator"
           :placeholder="pageText.selectActuator"
@@ -99,7 +108,7 @@
       :data="testcaseData"
       :pagination="pagination"
       :loading="loading"
-      :scroll="{ x: 1260 }"
+      :scroll="{ x: 1480 }"
       :row-selection="{ type: 'checkbox', showCheckedAll: true }"
       v-model:selectedKeys="selectedRowKeys"
       row-key="id"
@@ -113,6 +122,12 @@
         <a-tag :color="statusColors[record.status as ExecutionStatus]">
           {{ formatStatusLabel(record.status as ExecutionStatus) }}
         </a-tag>
+      </template>
+      <template #error_message="{ record }">
+        <a-tooltip v-if="record.status === 3 && record.error_message" :content="record.error_message" position="top">
+          <span class="fail-reason-text">{{ record.error_message }}</span>
+        </a-tooltip>
+        <span v-else>-</span>
       </template>
       <template #step_count="{ record }">
         <a-tag color="cyan">{{ formatStepCount(record.step_count) }}</a-tag>
@@ -217,7 +232,7 @@
 import FileAttachmentPicker from '@/features/file-management/components/FileAttachmentPicker.vue'
 import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconPlus, IconEdit, IconDelete, IconOrderedList, IconPlayArrow, IconThunderbolt, IconCopy } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconEdit, IconDelete, IconOrderedList, IconPlayArrow, IconThunderbolt, IconCopy, IconDownload } from '@arco-design/web-vue/es/icon'
 import { useProjectStore } from '@/store/projectStore'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { testCaseApi, moduleApi, actuatorApi, envConfigApi, type ActuatorInfo } from '../api'
@@ -273,6 +288,7 @@ const pageText = computed(() => (
         tableLevel: 'Level',
         tableStatus: 'Status',
         tableStepCount: 'Step count',
+        tableFailReason: 'Failure reason',
         tableCreatedBy: 'Created by',
         tableCreatedAt: 'Created at',
         tableActions: 'Actions',
@@ -305,6 +321,10 @@ const pageText = computed(() => (
         caseRunSuccess: (passed: number, total: number) => `Case execution succeeded: ${passed}/${total} steps passed`,
         caseRunFailed: (message: string) => `Case execution failed: ${message}`,
         insufficientSlots: (name: string, need: number, free: number) => `Actuator ${name} has insufficient free slots (need ${need}, only ${free} left)`,
+        exportPlaywright: 'Export Playwright',
+        selectCasesToExport: 'Select the cases to export first',
+        exportSuccess: 'Exported successfully',
+        exportFailed: 'Export failed',
       }
     : {
         selectModule: '选择模块',
@@ -343,6 +363,7 @@ const pageText = computed(() => (
         tableLevel: '等级',
         tableStatus: '状态',
         tableStepCount: '步骤数',
+        tableFailReason: '失败原因',
         tableCreatedBy: '创建者',
         tableCreatedAt: '创建时间',
         tableActions: '操作',
@@ -375,6 +396,10 @@ const pageText = computed(() => (
         caseRunSuccess: (passed: number, total: number) => `用例执行成功: ${passed}/${total} 步骤通过`,
         caseRunFailed: (message: string) => `用例执行失败: ${message}`,
         insufficientSlots: (name: string, need: number, free: number) => `执行器 ${name} 空闲 slot 不足（需要 ${need}，剩余 ${free}）`,
+        exportPlaywright: '导出Playwright',
+        selectCasesToExport: '请先选择要导出的用例',
+        exportSuccess: '导出成功',
+        exportFailed: '导出失败',
       }
 ))
 
@@ -434,6 +459,7 @@ const columns = computed(() => [
   { title: pageText.value.tableCaseName, dataIndex: 'name', ellipsis: true, tooltip: true, width: 220, align: 'center' as const },
   { title: pageText.value.tableLevel, slotName: 'level', width: 90, align: 'center' as const },
   { title: pageText.value.tableStatus, slotName: 'status', width: 100, align: 'center' as const },
+  { title: pageText.value.tableFailReason, slotName: 'error_message', ellipsis: true, tooltip: true, width: 220, align: 'center' as const },
   { title: pageText.value.tableStepCount, slotName: 'step_count', width: 110, align: 'center' as const },
   { title: pageText.value.tableCreatedBy, dataIndex: 'creator_name', width: 110, align: 'center' as const },
   { title: pageText.value.tableCreatedAt, slotName: 'created_at', width: 180, align: 'center' as const },
@@ -851,6 +877,27 @@ const batchDeleteTestCases = async () => {
   }
 }
 
+/** 批量导出选中的用例为 Playwright 可执行代码 */
+const exporting = ref(false)
+const exportPlaywrightCases = async () => {
+  if (selectedRowKeys.value.length === 0) {
+    Message.warning(pageText.value.selectCasesToExport)
+    return
+  }
+
+  exporting.value = true
+  try {
+    const res = await testCaseApi.exportPlaywright(selectedRowKeys.value)
+    if (res.success) {
+      Message.success(pageText.value.exportSuccess)
+    } else {
+      Message.error(res.error || pageText.value.exportFailed)
+    }
+  } finally {
+    exporting.value = false
+  }
+}
+
 /** 处理用例执行结果 */
 const handleCaseResult = (data: any) => {
   const result = data.data?.func_args as CaseResultModel
@@ -996,6 +1043,16 @@ onUnmounted(() => {
 <style scoped>
 .testcase-list {
   padding: 16px;
+}
+.fail-reason-text {
+  color: rgb(var(--danger-6));
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  cursor: default;
 }
 .page-header {
   display: flex;

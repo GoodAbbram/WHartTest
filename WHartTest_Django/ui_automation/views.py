@@ -8,8 +8,11 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models.deletion import ProtectedError
 from django.db import transaction
+from django.http import HttpResponse
+from urllib.parse import quote
 from copy import deepcopy
 from file_management.services import maybe_cleanup_unreferenced_files, sync_file_references
+from .playwright_export import build_export_bundle
 
 from .models import (
     UiModule, UiPage, UiElement, UiPageSteps, UiPageStepsDetailed,
@@ -588,7 +591,7 @@ class UiTestCaseViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return queryset.defer(
                 'result_data', 'front_custom', 'front_sql', 'posterior_sql',
-                'parametrize', 'case_flow', 'error_message', 'description'
+                'parametrize', 'case_flow', 'description'
             )
         return queryset
 
@@ -750,6 +753,54 @@ class UiTestCaseViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=False, methods=['get', 'post'], url_path='export-playwright')
+    def export_playwright(self, request, *args, **kwargs):
+        """批量导出 UI 自动化用例为 Playwright(pytest) 可执行代码。
+
+        GET  /api/ui-automation/testcases/export-playwright/?ids=1,2,3
+        POST {"ids": [1, 2, 3]}
+        不传 ids 时导出当前过滤条件下的全部用例。
+        单个用例返回 .py 文件，多个用例返回 zip 包。
+        """
+        raw_ids = request.query_params.get('ids') if request.method == 'GET' else request.data.get('ids')
+        id_list = []
+        if raw_ids:
+            try:
+                if isinstance(raw_ids, str):
+                    id_list = [int(x) for x in raw_ids.split(',') if str(x).strip()]
+                else:
+                    id_list = [int(x) for x in raw_ids]
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'ids参数格式错误，应为数字列表'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        queryset = self.get_queryset().prefetch_related(
+            'case_steps__page_step__step_details__element',
+        )
+        if id_list:
+            case_map = {case.id: case for case in queryset.filter(id__in=id_list)}
+            cases = [case_map[case_id] for case_id in id_list if case_id in case_map]
+        else:
+            cases = list(self.filter_queryset(queryset))
+
+        if not cases:
+            return Response(
+                {'error': '未找到可导出的用例'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = UiTestCaseExecuteSerializer(cases, many=True, context=self.get_serializer_context())
+        filename, content, content_type = build_export_bundle(serializer.data)
+
+        response = HttpResponse(content, content_type=content_type)
+        ascii_name = filename if filename.isascii() else 'wharttest_playwright_cases'
+        response['Content-Disposition'] = (
+            f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(filename)}'
+        )
+        return response
+
 
 class UiCaseStepsDetailedViewSet(viewsets.ModelViewSet):
     """用例步骤管理视图"""
@@ -795,7 +846,7 @@ class UiExecutionRecordViewSet(viewsets.ModelViewSet):
     queryset = UiExecutionRecord.objects.select_related('test_case', 'executor')
     serializer_class = UiExecutionRecordSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = {'test_case': ['exact'], 'status': ['exact'], 'trigger_type': ['exact'], 'test_case__project': ['exact']}
+    filterset_fields = {'test_case': ['exact'], 'status': ['exact'], 'trigger_type': ['exact'], 'test_case__project': ['exact'], 'test_case__name': ['icontains']}
     ordering_fields = ['created_at', 'duration']
     ordering = ['-created_at']
 
