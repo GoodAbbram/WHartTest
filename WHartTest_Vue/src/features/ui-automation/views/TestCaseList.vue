@@ -119,7 +119,7 @@
       :data="testcaseData"
       :pagination="pagination"
       :loading="loading"
-      :scroll="{ x: 1480 }"
+      :scroll="{ x: 1580 }"
       :row-selection="{ type: 'checkbox', showCheckedAll: true }"
       v-model:selectedKeys="selectedRowKeys"
       row-key="id"
@@ -145,6 +145,18 @@
       </template>
       <template #created_at="{ record }">
         {{ formatDate(record.created_at) }}
+      </template>
+      <template #execution_detail="{ record }">
+        <a-button
+          v-if="record.status === 2 || record.status === 3"
+          type="text"
+          size="mini"
+          @click="viewExecutionDetail(record)"
+        >
+          <template #icon><icon-history /></template>
+          {{ pageText.executionDetail }}
+        </a-button>
+        <span v-else>-</span>
       </template>
       <template #operations="{ record }">
         <a-space :size="4">
@@ -243,7 +255,7 @@
 import FileAttachmentPicker from '@/features/file-management/components/FileAttachmentPicker.vue'
 import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconPlus, IconEdit, IconDelete, IconOrderedList, IconPlayArrow, IconThunderbolt, IconCopy, IconDownload } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconEdit, IconDelete, IconOrderedList, IconPlayArrow, IconThunderbolt, IconCopy, IconDownload, IconHistory } from '@arco-design/web-vue/es/icon'
 import { useProjectStore } from '@/store/projectStore'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { testCaseApi, moduleApi, actuatorApi, envConfigApi, type ActuatorInfo } from '../api'
@@ -254,6 +266,10 @@ import CaseStepList from './CaseStepList.vue'
 
 const props = defineProps<{
   selectedModuleId?: number
+}>()
+
+const emit = defineEmits<{
+  (e: 'view-execution', caseId: number): void
 }>()
 
 const projectStore = useProjectStore()
@@ -303,6 +319,7 @@ const pageText = computed(() => (
         tableFailReason: 'Failure reason',
         tableCreatedBy: 'Created by',
         tableCreatedAt: 'Created at',
+        executionDetail: 'Detail',
         tableActions: 'Actions',
         fetchModuleListFailed: 'Failed to fetch module list',
         fetchCaseListFailed: 'Failed to fetch case list',
@@ -379,6 +396,7 @@ const pageText = computed(() => (
         tableFailReason: '失败原因',
         tableCreatedBy: '创建者',
         tableCreatedAt: '创建时间',
+        executionDetail: '执行详情',
         tableActions: '操作',
         fetchModuleListFailed: '获取模块列表失败',
         fetchCaseListFailed: '获取用例列表失败',
@@ -477,6 +495,7 @@ const columns = computed(() => [
   { title: pageText.value.tableStepCount, slotName: 'step_count', width: 110, align: 'center' as const },
   { title: pageText.value.tableCreatedBy, dataIndex: 'creator_name', width: 110, align: 'center' as const },
   { title: pageText.value.tableCreatedAt, slotName: 'created_at', width: 180, align: 'center' as const },
+  { title: pageText.value.executionDetail, slotName: 'execution_detail', width: 100, align: 'center' as const },
   { title: pageText.value.tableActions, slotName: 'operations', width: isEnglish.value ? 440 : 360, fixed: 'right' as const, align: 'center' as const },
 ])
 
@@ -720,6 +739,11 @@ const deleteTestCase = async (record: UiTestCase) => {
 const viewSteps = (record: UiTestCase) => {
   currentTestCase.value = record
   stepsDrawerVisible.value = true
+}
+
+/** 跳转到执行记录页并按用例ID筛选 */
+const viewExecutionDetail = (record: UiTestCase) => {
+  emit('view-execution', record.id)
 }
 
 

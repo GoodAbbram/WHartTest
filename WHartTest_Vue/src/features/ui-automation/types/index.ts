@@ -192,6 +192,7 @@ export interface UiExecutionRecord {
   batch?: number
   test_case: number
   test_case_name?: string
+  module_name?: string
   executor: number | null
   executor_name?: string
   status: ExecutionStatus | 4  // 含取消状态

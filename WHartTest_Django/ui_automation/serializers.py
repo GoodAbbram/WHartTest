@@ -330,15 +330,20 @@ class UiTestCaseExecuteSerializer(UiTestCaseSerializer):
 class UiExecutionRecordListSerializer(serializers.ModelSerializer):
     """执行记录列表序列化器（精简字段，提升性能）"""
     test_case_name = serializers.CharField(source='test_case.name', read_only=True)
+    module_name = serializers.SerializerMethodField()
     executor_name = serializers.CharField(source='executor.username', read_only=True)
 
     class Meta:
         model = UiExecutionRecord
         fields = [
-            'id', 'batch', 'test_case', 'test_case_name', 'executor', 'executor_name',
+            'id', 'batch', 'test_case', 'test_case_name', 'module_name', 'executor', 'executor_name',
             'status', 'trigger_type', 'start_time', 'end_time', 'duration', 'created_at'
         ]
         read_only_fields = ['created_at']
+
+    def get_module_name(self, obj) -> str | None:
+        # 优先取记录自身的模块快照，历史数据未回填时回退用例当前模块
+        return (obj.module.name if obj.module_id else None) or obj.test_case.module.name
 
 
 class UiExecutionRecordBatchDetailSerializer(serializers.ModelSerializer):
@@ -359,12 +364,24 @@ class UiExecutionRecordBatchDetailSerializer(serializers.ModelSerializer):
 class UiExecutionRecordSerializer(serializers.ModelSerializer):
     """执行记录序列化器"""
     test_case_name = serializers.CharField(source='test_case.name', read_only=True)
+    module_name = serializers.SerializerMethodField()
     executor_name = serializers.CharField(source='executor.username', read_only=True)
 
     class Meta:
         model = UiExecutionRecord
         fields = '__all__'
         read_only_fields = ['created_at']
+
+    def get_module_name(self, obj) -> str | None:
+        # 优先取记录自身的模块快照，历史数据未回填时回退用例当前模块
+        return (obj.module.name if obj.module_id else None) or obj.test_case.module.name
+
+    def create(self, validated_data):
+        # 新增执行记录时自动按用例填入其所属模块
+        test_case = validated_data.get('test_case')
+        if test_case is not None and not validated_data.get('module'):
+            validated_data['module'] = test_case.module
+        return super().create(validated_data)
 
 
 class UiPublicDataSerializer(serializers.ModelSerializer):

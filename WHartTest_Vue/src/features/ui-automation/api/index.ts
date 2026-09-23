@@ -219,8 +219,60 @@ export const caseStepsApi = {
 
 // ==================== 执行记录管理 ====================
 export const executionRecordApi = {
-  list: (params?: { project?: number; test_case?: number; status?: number; trigger_type?: string; test_case__name__icontains?: string }) =>
+  list: (params?: { project?: number; test_case?: number; module?: number; status?: number; trigger_type?: string; test_case__name__icontains?: string }) =>
     request.get<PaginatedResponse<UiExecutionRecord>>(`${BASE_URL}/execution-records/`, { params }),
+
+  /** 导出失败用例到 Excel：每用例仅保留最新一次执行记录，且仅当其状态为失败时导出，触发浏览器下载 */
+  exportFailed: async (params?: { project?: number; test_case?: number; module?: number; status?: number; trigger_type?: string; test_case__name__icontains?: string }): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const authStore = useAuthStore()
+    const accessToken = authStore.getAccessToken
+    if (!accessToken) {
+      return { success: false, error: '未登录或会话已过期' }
+    }
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/ui-automation/execution-records/export-failed/`,
+        { params, headers: { Authorization: `Bearer ${accessToken}` }, responseType: 'blob' }
+      )
+      const blob = response.data as Blob
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+
+      // 解析文件名：优先 filename*（UTF-8 编码的中文文件名），否则取 filename
+      const contentDisposition = (response.headers['content-disposition'] as string) || ''
+      let filename = `failed_executions_${new Date().toISOString().split('T')[0]}.xlsx`
+      const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;\n]+)/)
+      if (utf8Match?.[1]) {
+        filename = decodeURIComponent(utf8Match[1])
+      } else {
+        const plainMatch = contentDisposition.match(/filename="?([^";\n]+)"?/)
+        if (plainMatch?.[1]) filename = plainMatch[1]
+      }
+
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      return { success: true, message: filename }
+    } catch (error: any) {
+      console.error('导出失败用例出错:', error)
+      let errorMessage = '导出失败用例时发生错误'
+      if (error.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text()
+          const errorData = JSON.parse(text)
+          errorMessage = errorData.error || errorData.message || errorMessage
+        } catch {
+          // 保持默认错误信息
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      return { success: false, error: errorMessage }
+    }
+  },
 
   get: (id: number) => request.get<UiExecutionRecord>(`${BASE_URL}/execution-records/${id}/`),
 

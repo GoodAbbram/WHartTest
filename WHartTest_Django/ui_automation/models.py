@@ -397,6 +397,10 @@ class UiExecutionRecord(models.Model):
         UiTestCase, on_delete=models.CASCADE,
         related_name='execution_records', verbose_name=_('所属用例')
     )
+    module = models.ForeignKey(
+        UiModule, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='ui_execution_records', verbose_name=_('所属模块')
+    )
     executor = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True,
         related_name='ui_executions', verbose_name=_('执行人')

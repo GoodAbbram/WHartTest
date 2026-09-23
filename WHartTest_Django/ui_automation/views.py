@@ -843,12 +843,60 @@ class UiCaseStepsDetailedViewSet(viewsets.ModelViewSet):
 
 class UiExecutionRecordViewSet(viewsets.ModelViewSet):
     """执行记录管理视图"""
-    queryset = UiExecutionRecord.objects.select_related('test_case', 'executor')
+    queryset = UiExecutionRecord.objects.select_related('test_case', 'test_case__module', 'module', 'executor')
     serializer_class = UiExecutionRecordSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = {'test_case': ['exact'], 'status': ['exact'], 'trigger_type': ['exact'], 'test_case__project': ['exact'], 'test_case__name': ['icontains']}
+    filterset_fields = {'test_case': ['exact'], 'status': ['exact'], 'trigger_type': ['exact'], 'module': ['exact'], 'test_case__project': ['exact'], 'test_case__name': ['icontains']}
     ordering_fields = ['created_at', 'duration']
     ordering = ['-created_at']
+
+    @action(detail=False, methods=['get'], url_path='export-failed')
+    def export_failed(self, request):
+        """导出失败用例到 Excel：每用例仅保留最新一次执行记录，且仅当其状态为失败时导出"""
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment
+        from datetime import datetime
+        from django.db.models import Max
+
+        queryset = self.filter_queryset(self.get_queryset())
+        # pk 单调递增，Max(id) 即每个用例的最新一次执行记录
+        latest_pks = queryset.values('test_case_id').annotate(latest_pk=Max('id')).values_list('latest_pk', flat=True)
+        records = (
+            UiExecutionRecord.objects.filter(id__in=latest_pks, status=3)  # 3 = 失败
+            .select_related('test_case', 'module', 'executor')
+            .order_by('-created_at')
+        )
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = '失败用例'
+        headers = ['执行记录ID', '用例ID', '用例名称', '所属模块', '执行人', '执行状态', '触发类型', '执行时长(秒)', '开始时间', '结束时间', '错误信息']
+        ws.append(headers)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        for r in records:
+            ws.append([
+                r.id,
+                r.test_case_id,
+                r.test_case.name,
+                r.module.name if r.module else (r.test_case.module.name if r.test_case.module else ''),
+                r.executor.username if r.executor else '',
+                '失败',
+                r.get_trigger_type_display(),
+                r.duration if r.duration is not None else '',
+                r.start_time.strftime('%Y-%m-%d %H:%M:%S') if r.start_time else '',
+                r.end_time.strftime('%Y-%m-%d %H:%M:%S') if r.end_time else '',
+                r.error_message or '',
+            ])
+        for i, width in enumerate([12, 10, 40, 16, 12, 10, 12, 12, 22, 22, 50], start=1):
+            ws.column_dimensions[chr(64 + i)].width = width
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        filename = f"failed_executions_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+        response['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        wb.save(response)
+        return response
 
     def get_queryset(self):
         """列表查询时排除大字段，支持 project 参数过滤"""

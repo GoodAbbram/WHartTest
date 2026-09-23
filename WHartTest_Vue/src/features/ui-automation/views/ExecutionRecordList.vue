@@ -2,6 +2,26 @@
   <div class="execution-record-list">
     <div class="page-header">
       <div class="search-box">
+        <a-select
+          v-model="filters.module"
+          :placeholder="pageText.modulePlaceholder"
+          allow-clear
+          style="width: 160px; margin-right: 12px"
+          @change="onSearch"
+        >
+          <a-option v-for="mod in moduleOptions" :key="mod.id" :value="mod.id">
+            {{ mod.name }}
+          </a-option>
+        </a-select>
+        <a-input-number
+          v-model="filters.test_case"
+          :placeholder="pageText.caseIdPlaceholder"
+          hide-button
+          allow-clear
+          style="width: 140px; margin-right: 12px"
+          @change="onSearch"
+          @clear="onSearch"
+        />
         <a-input-search
           v-model="filters.case_name"
           :placeholder="pageText.caseNamePlaceholder"
@@ -34,6 +54,10 @@
           <template #icon><icon-refresh /></template>
           {{ pageText.refresh }}
         </a-button>
+        <a-button type="outline" :loading="exporting" @click="onExportFailed">
+          <template #icon><icon-download /></template>
+          {{ pageText.exportFailed }}
+        </a-button>
       </div>
     </div>
 
@@ -42,7 +66,7 @@
       :data="recordData"
       :pagination="pagination"
       :loading="loading"
-      :scroll="{ x: 1200 }"
+      :scroll="{ x: 1320 }"
       row-key="id"
       @page-change="onPageChange"
       @page-size-change="onPageSizeChange"
@@ -183,8 +207,8 @@ import { useRouter } from 'vue-router'
 import { IconRefresh, IconEye, IconDelete } from '@arco-design/web-vue/es/icon'
 import { Message } from '@arco-design/web-vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { executionRecordApi } from '../api'
-import type { UiExecutionRecord, ExecutionStatus } from '../types'
+import { executionRecordApi, moduleApi } from '../api'
+import type { UiExecutionRecord, UiModule, ExecutionStatus } from '../types'
 import { STATUS_LABELS, extractPaginationData, extractResponseData } from '../types'
 import { useProjectStore } from '@/store/projectStore'
 
@@ -193,8 +217,14 @@ const projectStore = useProjectStore()
 const projectId = computed(() => projectStore.currentProject?.id)
 const { isEnglish, tl } = useAppI18n()
 
+const props = defineProps<{
+  /** 外部跳转带入的用例ID筛选 */
+  caseId?: number
+}>()
+
 const loading = ref(false)
 const recordData = ref<UiExecutionRecord[]>([])
+const moduleOptions = ref<UiModule[]>([]) // 模块下拉选项（树展平，逻辑同测试用例页）
 const drawerVisible = ref(false)
 const currentRecord = ref<UiExecutionRecord | null>(null)
 
@@ -202,9 +232,14 @@ const pageText = computed(() => (
   isEnglish.value
     ? {
         statusPlaceholder: 'Status',
+        caseIdPlaceholder: 'Case ID',
+        modulePlaceholder: 'Module',
         caseNamePlaceholder: 'Search by case name',
         triggerPlaceholder: 'Trigger type',
         refresh: 'Refresh',
+        exportFailed: 'Export Failed',
+        exportSuccess: 'Exported:',
+        exportFailedError: 'Export failed',
         unknown: 'Unknown',
         details: 'Details',
         delete: 'Delete',
@@ -232,6 +267,7 @@ const pageText = computed(() => (
         api: 'API Trigger',
         caseNameColumn: 'Case Name',
         caseIdColumn: 'Case ID',
+        moduleColumn: 'Module',
         executorColumn: 'Executor',
         statusColumn: 'Status',
         durationColumn: 'Duration',
@@ -246,9 +282,14 @@ const pageText = computed(() => (
       }
     : {
         statusPlaceholder: '执行状态',
+        caseIdPlaceholder: '按用例ID查询',
+        modulePlaceholder: '所属模块',
         caseNamePlaceholder: '输入用例名称搜索',
         triggerPlaceholder: '触发类型',
         refresh: '刷新',
+        exportFailed: '导出失败用例',
+        exportSuccess: '已导出：',
+        exportFailedError: '导出失败',
         unknown: '未知',
         details: '详情',
         delete: '删除',
@@ -276,6 +317,7 @@ const pageText = computed(() => (
         api: 'API 触发',
         caseNameColumn: '用例名称',
         caseIdColumn: '用例ID',
+        moduleColumn: '模块',
         executorColumn: '执行人',
         statusColumn: '状态',
         durationColumn: '时长',
@@ -294,6 +336,8 @@ const filters = reactive({
   status: undefined as number | undefined,
   trigger_type: undefined as string | undefined,
   case_name: '' as string,
+  test_case: undefined as number | undefined,
+  module: undefined as number | undefined,
 })
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showTotal: true, showPageSize: true })
 
@@ -324,10 +368,36 @@ const getStatusLabel = (status?: number) => {
   return tl(STATUS_LABELS[status as ExecutionStatus] ?? pageText.value.unknown)
 }
 
+/** 模块树展平为带层级缩进的选项列表（逻辑同测试用例页） */
+const flattenModules = (modules: UiModule[], level = 0, visited = new Set<number>()): UiModule[] => {
+  const result: UiModule[] = []
+  for (const mod of modules) {
+    if (visited.has(mod.id)) continue
+    visited.add(mod.id)
+    result.push({ ...mod, name: '\u00A0\u00A0'.repeat(level) + mod.name })
+    if (mod.children?.length) {
+      result.push(...flattenModules(mod.children as UiModule[], level + 1, visited))
+    }
+  }
+  return result
+}
+
+const fetchModules = async () => {
+  if (!projectId.value) return
+  try {
+    const res = await moduleApi.tree(projectId.value)
+    const modules = extractResponseData<UiModule[]>(res) || []
+    moduleOptions.value = flattenModules(modules)
+  } catch {
+    // 静默失败
+  }
+}
+
 const columns = computed(() => [
   { title: 'ID', dataIndex: 'id', width: 70, align: 'center' as const },
   { title: pageText.value.caseIdColumn, dataIndex: 'test_case', width: 90, align: 'center' as const },
   { title: pageText.value.caseNameColumn, dataIndex: 'test_case_name', ellipsis: true, tooltip: true, width: 180, align: 'center' as const },
+  { title: pageText.value.moduleColumn, dataIndex: 'module_name', ellipsis: true, tooltip: true, width: 120, align: 'center' as const },
   { title: pageText.value.executorColumn, dataIndex: 'executor_name', width: 100, align: 'center' as const },
   { title: pageText.value.statusColumn, slotName: 'status', width: 90, align: 'center' as const },
   { title: pageText.value.triggerType, slotName: 'trigger_type', width: 100, align: 'center' as const },
@@ -404,21 +474,28 @@ const formatScreenshotUrl = (path: string) => {
   return `/media/ui_screenshots/${filename}`
 }
 
+let fetchSeq = 0 // 请求序号，仅采纳最新一次请求的结果，避免并发响应乱序覆盖
 const fetchRecords = async () => {
   if (!projectId.value) return
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const res = await executionRecordApi.list({
       project: projectId.value,
       status: filters.status,
       trigger_type: filters.trigger_type,
+      test_case: filters.test_case,
+      module: filters.module,
       test_case__name__icontains: filters.case_name.trim() || undefined,
     })
+    if (seq !== fetchSeq) return
     const { items, count } = extractPaginationData(res)
     recordData.value = items
     pagination.total = count
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) {
+      loading.value = false
+    }
   }
 }
 
@@ -468,14 +545,45 @@ const handleDelete = async (id: number) => {
 
 const refresh = () => fetchRecords()
 
+/** 导出失败用例：遵循当前筛选条件，后端按"最新一次执行为失败"聚合 */
+const exporting = ref(false)
+const onExportFailed = async () => {
+  exporting.value = true
+  try {
+    const result = await executionRecordApi.exportFailed({
+      project: projectId.value,
+      status: filters.status,
+      trigger_type: filters.trigger_type,
+      test_case: filters.test_case,
+      module: filters.module,
+      test_case__name__icontains: filters.case_name.trim() || undefined,
+    })
+    if (result.success) {
+      Message.success(`${tl('exportSuccess')} ${result.message || ''}`)
+    } else {
+      Message.error(result.error || tl('exportFailedError'))
+    }
+  } finally {
+    exporting.value = false
+  }
+}
+
 defineExpose({ refresh })
 
 watch(projectId, () => {
   if (projectId.value) {
     pagination.current = 1
+    fetchModules()
     fetchRecords()
   }
 }, { immediate: true })
+
+/** 外部跳转带入的用例ID筛选（如从测试用例页"执行详情"跳转）；sync 确保先于父组件切 tab 的 refresh 生效 */
+watch(() => props.caseId, (val) => {
+  filters.test_case = val
+  pagination.current = 1
+  fetchRecords()
+}, { flush: 'sync' })
 </script>
 
 <style scoped>

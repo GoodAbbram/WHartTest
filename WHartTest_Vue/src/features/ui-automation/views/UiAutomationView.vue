@@ -10,10 +10,10 @@
           <PageStepList ref="pageStepListRef" :selected-module-id="selectedModuleId" />
         </a-tab-pane>
         <a-tab-pane key="testcases" :title="tl('测试用例')">
-          <TestCaseList ref="testCaseListRef" :selected-module-id="selectedModuleId" />
+          <TestCaseList ref="testCaseListRef" :selected-module-id="selectedModuleId" @view-execution="onViewExecution" />
         </a-tab-pane>
         <a-tab-pane key="execution-records" :title="tl('执行记录')">
-          <ExecutionRecordList ref="executionRecordListRef" />
+          <ExecutionRecordList ref="executionRecordListRef" :case-id="executionFilterCaseId" />
         </a-tab-pane>
         <a-tab-pane key="batch-records" :title="tl('批量执行')">
           <BatchRecordList ref="batchRecordListRef" />
@@ -50,6 +50,13 @@ const { locale, tl } = useAppI18n()
 const activeTab = ref('pages')
 const modulePanelRef = ref()
 const selectedModuleId = ref<number | undefined>(undefined)
+const executionFilterCaseId = ref<number | undefined>(undefined)
+
+/** 测试用例页点击"执行详情"：切换到执行记录页并按用例ID筛选 */
+const onViewExecution = (caseId: number) => {
+  executionFilterCaseId.value = caseId
+  activeTab.value = 'execution-records'
+}
 
 const pageListRef = ref()
 const pageStepListRef = ref()

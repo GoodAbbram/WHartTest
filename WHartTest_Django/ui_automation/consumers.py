@@ -754,6 +754,7 @@ class UiAutomationConsumer(AsyncWebsocketConsumer):
 
             record = UiExecutionRecord.objects.create(
                 test_case_id=case_id,
+                module_id=UiTestCase.objects.filter(id=case_id).values_list('module_id', flat=True).first(),
                 batch_id=batch_id,
                 executor=executor,
                 status=status,
